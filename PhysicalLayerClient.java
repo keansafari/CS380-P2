@@ -23,13 +23,25 @@ public class PhysicalLayerClient {
 			
 
 
-			//Get and Print 32 bytes
-			//byte[] nzri = getNZRI();
-			
+			//Recieve the Bytes -- stores into a list
+			LinkedList<Integer> initialSignal = recievedByteSignal(socket);
 
-			//Write to stream
-			OutputStream out = socket.getOutputStream();
-			PrintWriter pw = new PrintWriter(out);
+			//Creates binary list of the signals parallel to the signal recieved
+			//from the server
+			LinkedList<Integer> fiveBitSignal = encodeNRZI(initialSignal, socket);
+
+			//Creates a new list with the decoded five bit using the conversion table given
+			LinkedList<Integer> fiveBitDecode = messageDecode(fiveBitSignal, convmap);
+			
+			//~mergeBits
+			LinkedList<Integer> bitCombine = combineBits(fiveBitDecode);
+
+			//Write to stream -> sends message back
+			relayMessage(bitCombine, socket);
+
+			socket.close();
+			System.out.println("Disconnected From Server");
+
 			
 		} catch (Exception e) { e.printStackTrace(System.out); }
 
@@ -58,17 +70,7 @@ public class PhysicalLayerClient {
 		return 0;
 	}
 
-	//Work on this
-	/*
-	public byte[] getNZRI() {
-		byte[] nzri = new byte[32];
-		for (int i = 0; i < 32; i++) {
-			
-		}
-		
-	}*/
-
-
+	//Given 4b/5b conversion table
 	private static HashMap create4b5bconversionmap() {
 		HashMap<String, String> map = new HashMap<String, String>() {{
 			put("11110", "0000"); 
@@ -90,4 +92,113 @@ public class PhysicalLayerClient {
 	    }};
 	    return map;
 	}
+
+	public static LinkedList<Integer> messageDecode(LinkedList<Integer> fiveSig, HashMap convmap) {
+		LinkedList<Integer> message = new LinkedList<>();
+		for (int i = 0; i < fiveSig.size()-4; i+=5) {
+			LinkedList<Integer> list = new LinkedList<>();
+			
+			//Reads 5 bits at a time and adds it to a new temporary list
+			list.add(fiveSig.get(i));
+			list.add(fiveSig.get(i+1));
+			list.add(fiveSig.get(i+2));
+			list.add(fiveSig.get(i+3));
+			list.add(fiveSig.get(i+4));
+
+			//Sends 4B message to recieve appropriate 5B conversion
+			
+			//message.add(convmap.get5B(list));
+			int old = get5B(list, convmap);
+			
+
+			int fiveBit = convmap.get(old);
+			message.add(fiveBit);
+			
+
+
+		}
+		return message;
+	} 
+
+	public static int get5B(LinkedList<Integer> oldMessage, HashMap table) {
+	
+		String key = stringConversion(oldMessage);
+		return Integer.parseInt(table.get(key),2);
+
+	}
+
+	public static LinkedList<Integer> recievedByteSignal(Socket socket) {
+		try {
+			InputStream is = socket.getInputStream();
+			LinkedList<Integer> bytes = new LinkedList<>();
+			int recievedInput;
+			for (int i = 0; i < 320; i++) {
+				recievedInput = is.read();
+				bytes.add(recievedInput);
+			}
+			return bytes;
+		} catch (Exception e) {
+			e.printStackTrace(System.out);
+		}
+		return null;
+	}
+
+	public static LinkedList<Integer> encodeNRZI(LinkedList<Integer> initialSignal, Socket socket) {
+		LinkedList<Integer> decodedMessage = new LinkedList<>();
+		int temp = 0;
+		
+		//For loop to create binary signals for the intput recieved
+		for (int i = 0; i < initialSignal.size(); i++) {
+			if (initialSignal.get(i) == temp)
+				decodedMessage.add(0);
+			else
+				decodedMessage.add(1);
+		}
+	
+		return decodedMessage;
+	}
+
+	public static LinkedList<Integer> combineBits(LinkedList<Integer> oldBitMessage) {
+		LinkedList<Integer> newMessage = new LinkedList<>();
+		for (int i = 0; i < oldBitMessage.size(); i++) {
+			int upperBit = oldBitMessage.get(i);
+			int lowerBit = oldBitMessage.get(i+1);
+			upperBit = upperBit * 16 + lowerBit;
+			newMessage.add(upperBit);
+		}
+		return newMessage;
+	}
+
+	public static void relayMessage(LinkedList<Integer> bits, Socket socket) {
+		try {
+			int size = bits.size();
+			OutputStream os = socket.getOutputStream();
+			byte[] toServer = new byte[message.size()];
+			System.out.print("Recieved Bytes:  ");
+
+			for (int i = 0; i < size; i++) {
+				int bit = message.get(i);
+				System.out.print(Integer.toHexString(bit).toUpperCase());
+				toServer[i] = (byte) bit;
+			}
+			System.out.println("\n");
+			os.write(toServer);
+		} catch (Exception e) {
+			e.printStackTrace(); 
+		}
+	}
+
+
+	private static String stringConversion(LinkedList<Integer> curSig) {
+		String convert = "";
+		for (Integer i : curSig) {
+			convert += i;
+			convert += " ";
+		}
+		return convert;
+	}
+
+
+
+
 }
